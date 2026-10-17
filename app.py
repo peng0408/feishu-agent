@@ -178,6 +178,10 @@ textarea{width:100%;height:70px;resize:vertical;margin:10px 0}
 .sum li{margin:4px 0}
 .sum p{margin:8px 0}
 .sum code{background:#f2f3f5;padding:1px 5px;border-radius:4px;font-size:13px}
+.sum table{border-collapse:collapse;margin:10px 0;font-size:14px}
+.sum th,.sum td{border:1px solid #e5e6eb;padding:6px 10px;text-align:left}
+.sum th{background:#f7f8fa}
+.sum blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid #e5e6eb;background:#fafbfc;color:#4e5969}
 .err{color:#d4380d;font-size:14px;white-space:pre-wrap;word-break:break-all}
 .err a{color:#d4380d}
 details{margin-top:16px}
@@ -228,11 +232,42 @@ function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
 function linkify(s){ return esc(s).replace(/(https?:\/\/[^\s)）]+)/g, function(u){ return '<a href="' + u + '" target="_blank">' + u + '</a>'; }); }
 function inlineMd(s){ return esc(s).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>"); }
+function cells(row){
+  return row.replace(/^\|/, "").replace(/\|$/, "").split("|").map(function(c){ return c.trim(); });
+}
 function md(text){
   var out = [], list = false;
   var lines = String(text).split("\n");
   for (var i = 0; i < lines.length; i++){
     var line = lines[i].replace(/\s+$/, "");
+    if (/^\s*\|/.test(line)){
+      if (list){ out.push("</ul>"); list = false; }
+      var rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])){ rows.push(lines[i].trim()); i++; }
+      i--;
+      var head = cells(rows[0]);
+      var body = rows.slice(2);
+      var html = "<table><thead><tr>";
+      head.forEach(function(c){ html += "<th>" + inlineMd(c) + "</th>"; });
+      html += "</tr></thead><tbody>";
+      body.forEach(function(r){
+        html += "<tr>";
+        cells(r).forEach(function(c){ html += "<td>" + inlineMd(c) + "</td>"; });
+        html += "</tr>";
+      });
+      out.push(html + "</tbody></table>");
+      continue;
+    }
+    if (/^\s*>\s?/.test(line)){
+      if (list){ out.push("</ul>"); list = false; }
+      var quoted = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])){
+        quoted.push(lines[i].replace(/^\s*>\s?/, "")); i++;
+      }
+      i--;
+      out.push("<blockquote>" + quoted.map(inlineMd).join("<br>") + "</blockquote>");
+      continue;
+    }
     var li = line.match(/^\s*[-*]\s+(.*)$/);
     if (li){ if(!list){ out.push("<ul>"); list = true; } out.push("<li>" + inlineMd(li[1]) + "</li>"); continue; }
     if (list){ out.push("</ul>"); list = false; }
@@ -266,7 +301,7 @@ function refreshAuth(){
 function loadChats(){
   hint("正在加载会话…");
   $("out").innerHTML = "";
-  fetch("/api/feishu/chats").then(function(r){ return r.json(); }).then(function(d){
+  return fetch("/api/feishu/chats").then(function(r){ return r.json(); }).then(function(d){
     if (d.error){ fail(d.error); hint("加载失败"); return; }
     var sel = $("chats");
     sel.innerHTML = "";
@@ -326,7 +361,14 @@ function ask(){
     $("ans").innerHTML = render(d.reply || d.error || "");
   }).catch(function(e){ $("ans").innerHTML = '<div class="err">请求失败：' + esc(e) + "</div>"; });
 }
-window.addEventListener("load", function(){ refreshAuth(); loadChats(); });
+window.addEventListener("load", function(){
+  var q = new URLSearchParams(location.search);
+  if (q.get("hours")){ $("hours").value = q.get("hours"); }
+  refreshAuth();
+  loadChats().then(function(){
+    if (q.get("auto")){ setTimeout(runSummary, 400); }
+  });
+});
 </script>
 </body></html>'''
 
