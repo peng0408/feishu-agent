@@ -1,0 +1,10 @@
+# 本地密钥，绝不提交
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+
+# 历史备份
+*.bak
+*.bak-*
